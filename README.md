@@ -1,5 +1,8 @@
 # LLMeBench: A Flexible Framework for Accelerating LLMs Benchmarking
 
+
+## python -m llmebench --env envs/azure.env --filter "HotpotQA" --limit 10 assets results
+
 This repository contains code for the LLMeBench framework (described in <a href="https://arxiv.org/abs/2308.04945" target="_blank">this paper</a>). The framework currently supports evaluation of a variety of NLP tasks using **three** model providers: OpenAI (e.g., [GPT](https://platform.openai.com/docs/guides/gpt)), [HuggingFace Inference API](https://huggingface.co/docs/api-inference/), and Petals (e.g., [BLOOMZ](https://huggingface.co/bigscience/bloomz)); it can be seamlessly customized for any NLP task, LLM model and dataset, regardless of language.
 
 <!---"https://github.com/qcri/LLMeBench/assets/3918663/15d989e0-edc7-489a-ba3b-36184a715383"--->

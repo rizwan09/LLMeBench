@@ -57,7 +57,12 @@ class QATask(TaskBase):
             total += 1
             if prediction is None:
                 continue
-            ground_truths = ground_truth
+            if isinstance(ground_truth, str):
+                ground_truths = [ground_truth]
+            else:
+                ground_truths = ground_truth
+            print("ground truth: ", ground_truths)
+            print("predictions: ", prediction)
             exact_match += self.metric_max_over_ground_truths(
                 self.exact_match_score, prediction, ground_truths
             )

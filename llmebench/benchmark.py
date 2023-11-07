@@ -211,10 +211,16 @@ class SingleTaskBenchmark(object):
             ):
                 if self.limit > 0 and sample_idx >= self.limit:
                     break
-                logging.info(f"Running sample {sample_idx}: {input_sample['input']}")
+                try: 
+                    logging.info(f"Running sample {sample_idx}: {input_sample['input']}")
+                except:
+                    logging.info(f"Running sample {sample_idx}: {input_sample['question']}")
                 num_processed += 1
                 cache_path = cache_dir / f"{sample_idx}.json"
-                true_labels.append(input_sample["label"])
+                try: 
+                    true_labels.append(input_sample["label"])
+                except:
+                    true_labels.append(input_sample["answer"])
 
                 cache_payload = {"input": input_sample}
 
@@ -225,18 +231,31 @@ class SingleTaskBenchmark(object):
                     with open(cache_path, "r") as fp:
                         cache_payload = json.load(fp)
 
-                summarized_payload = {
-                    "input": input_sample["input"],
-                    "label": input_sample["label"],
-                }
+                try:
+                    summarized_payload = {
+                        "input": input_sample["input"],
+                        "label": input_sample["label"],
+                    }
+                except:
+                    summarized_payload = input_sample
 
-                cache_payload, partial_summarized_payload = self.run_pipeline(
+                try:
+                    cache_payload, partial_summarized_payload = self.run_pipeline(
+                        sample_idx,
+                        input_sample["input"],
+                        few_shot_examples,
+                        cache_payload,
+                        dry_run,
+                    )
+                except:
+                    cache_payload, partial_summarized_payload = self.run_pipeline(
                     sample_idx,
-                    input_sample["input"],
+                    input_sample,
                     few_shot_examples,
                     cache_payload,
                     dry_run,
                 )
+
 
                 summarized_payload.update(partial_summarized_payload)
 

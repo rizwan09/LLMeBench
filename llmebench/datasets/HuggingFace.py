@@ -26,13 +26,14 @@ class HuggingFaceDataset(DatasetBase):
         other mappings (such as "input_id").
     """
 
-    def __init__(self, huggingface_dataset_name, column_mapping, **kwargs):
+    def __init__(self, huggingface_dataset_name, column_mapping, sub_split, **kwargs):
         self.huggingface_dataset_name = huggingface_dataset_name
-
+        
         # Check for column_mapping
         assert "input" in column_mapping
         assert "label" in column_mapping
         self.column_mapping = column_mapping
+        self.sub_split = sub_split
 
         super(HuggingFaceDataset, self).__init__(**kwargs)
 
@@ -57,10 +58,15 @@ class HuggingFaceDataset(DatasetBase):
     def get_data_sample():
         return {"input": "Test Input", "label": "0"}
 
-    def load_data(self, data_split, no_labels=False):
-        dataset = datasets.load_dataset(
-            self.huggingface_dataset_name, split=data_split, cache_dir=self.data_dir
-        )
+    def load_data(self, data_split, no_labels=False, sub_split=""):
+        if self.sub_split:
+            dataset = datasets.load_dataset(
+                self.huggingface_dataset_name, self.sub_split, split=data_split, cache_dir=self.data_dir
+            )
+        else:
+            dataset = datasets.load_dataset(
+                self.huggingface_dataset_name, split=data_split, cache_dir=self.data_dir
+            )
 
         data = []
         for sample in dataset:
@@ -75,3 +81,7 @@ class HuggingFaceDataset(DatasetBase):
     def download_dataset(cls, data_dir, download_url=None, default_url=None):
         # HuggingFace datasets library has its own data downloader
         pass
+
+
+
+

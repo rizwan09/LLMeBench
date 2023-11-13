@@ -58,7 +58,7 @@ class HuggingFaceDataset(DatasetBase):
     def get_data_sample():
         return {"input": "Test Input", "label": "0"}
 
-    def load_data(self, data_split, no_labels=False, sub_split=""):
+    def load_data(self, data_split, no_labels=False):
         if self.sub_split:
             dataset = datasets.load_dataset(
                 self.huggingface_dataset_name, self.sub_split, split=data_split, cache_dir=self.data_dir
@@ -71,8 +71,11 @@ class HuggingFaceDataset(DatasetBase):
         data = []
         for sample in dataset:
             processed_sample = {}
-            for sample_key, column_name in self.column_mapping.items():
-                processed_sample[sample_key] = sample[column_name]
+            if "multi_column" not in self.column_mapping:
+                for sample_key, column_name in self.column_mapping.items():
+                    processed_sample[sample_key] = sample[column_name]
+            else:
+                processed_sample = sample
             data.append(processed_sample)
 
         return data

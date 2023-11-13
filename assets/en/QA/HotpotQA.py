@@ -18,13 +18,11 @@ def config():
         "dataset_args": {
             "huggingface_dataset_name": "hotpot_qa",
             "sub_split": "distractor",
-            
             "column_mapping": {
                 "input": "question",
                 "label": "answer",
-                "input_id": "idx",
+                "multi_column":True,
             },
-            "multi_column_data": True,
         },
         "task": QATask,
         "model": OpenAIModel,
@@ -34,9 +32,7 @@ def config():
         "general_args": {"custom_test_split": "validation"},
     }
 
-
 def prompt(data_row):
-
     id = data_row["id"]
     question = data_row["question"]
     answer = data_row["answer"]

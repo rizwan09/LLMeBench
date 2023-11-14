@@ -2,6 +2,8 @@ import os
 
 import openai
 
+import json
+
 from llmebench.models.model_base import ModelBase
 
 
@@ -207,6 +209,41 @@ class LegacyOpenAIModel(OpenAIModelBase):
         return response
 
 
+def last_prompt(data_row):
+    import pdb
+    pdb.set_trace()
+    id = data_row["id"]
+    question = data_row["question"]
+    answer = data_row["answer"]
+    supporting_facts = data_row["supporting_facts"]
+    contexts = data_row["context"]["sentences"]
+
+
+    paragraphs = [''.join(docs) for docs in contexts]
+    
+    prompt_string = (
+        f"Question:{question}\nContext:{paragraphs}"
+        f"Output josn:\n\n"
+    )
+
+    system_string = (
+        f"You are a question answering agent. Given a context and a question, your task is to answer the question based on the context." 
+        f"Generate the answer in a json output format with 'answer' tag"
+        f"Instead of a full sentence, your answer must be the shortest word or phrase or named enitity."
+        f" Some example outputs are: yes; no; Ibn Sina; Doha, Qatar; 2,132 seats, Los Angeles, California etc.,.\n\n " 
+    )
+    return [
+        {
+            "role": "system",
+            "content": system_string,
+        },
+        {"role": "user", "content": prompt_string},
+    ]
+
+
+
+
+
 class OpenAIModel(OpenAIModelBase):
     def summarize_response(self, response):
         """Returns the first reply from the "assistant", if available"""
@@ -222,9 +259,48 @@ class OpenAIModel(OpenAIModelBase):
 
         return response
 
+    
+    def coref_prompt(self, contexts):
+        paragraphs = [''.join(docs) for docs in contexts]
+        new_contexts = []
+        
+        import pdb
+        for i, pr in enumerate(paragraphs):
+            prompt_string = (
+                f"paragraph:{pr}\n\n"
+            )
+
+            system_string = (
+                f"You are an AI assistant for corefrence resolution."
+                f"You will be given a paragraph and you will produce a new paragraph replacing the pronouns with the first/original reference within the paragraph "
+                f"output is the sentences in the paragraphs in a json format each with mendatory five following tags.  "
+                f"1. raw_sentence: original sentence in the given paraphraph; "
+                f"2. resolved_sentence: new sentence after the coreference resolution. "
+                f"3. changes: replacement old and new span in the sentence.  "
+                f"4. coref_after_article_the: any coreference that came after article 'the' e.g., 'the film' should be replaced with 'the film film_name' " 
+                f"5. any_parphrasing_or_other_changes_done: any changes made or parapharsing done other than coreference replacemnets. "
+            )
+        
+            msg = [
+                { "role": "system", "content": system_string,},
+                {"role": "user", "content": prompt_string},
+            ]
+            response = openai.ChatCompletion.create(
+                    messages=msg, **self.model_params
+            )
+            try:
+                ctx = json.loads(response["choices"][0]["message"]["content"])
+                new_contexts.append(ctx)
+            except:
+                # TODO: Better way needed 
+                new_contexts.append(contexts[i])
+            
+            
+        return new_contexts
+
     def prompt(self, processed_input):
         """
-        OpenAI API ChatCompletion implementation
+        OpenAI API ChatCompletion implementationn
 
         Arguments
         ---------
@@ -239,8 +315,14 @@ class OpenAIModel(OpenAIModelBase):
             Response from the openai python library
 
         """
+        import pdb
+       
+        coref_contexts = self.coref_prompt(processed_input["context"]["sentences"])
+        pdb.set_trace()
+        processed_input["context"]["sentences"] = coref_contexts
+        pdb.set_trace()
         response = openai.ChatCompletion.create(
-            messages=processed_input, **self.model_params
+            messages=last_prompt(processed_input), **self.model_params
         )
 
         return response

@@ -267,18 +267,19 @@ class OpenAIModel(OpenAIModelBase):
         import pdb
         for i, pr in enumerate(paragraphs):
             prompt_string = (
-                f"paragraph:{pr}\n\n"
+                f"paragraph: {pr}\n\n"
             )
 
             system_string = (
                 f"You are an AI assistant for corefrence resolution."
                 f"You will be given a paragraph and you will produce a new paragraph replacing the pronouns with the first/original reference within the paragraph "
-                f"output is the sentences in the paragraphs in a json format each with mendatory five following tags.  "
+                f"output is the sentences in the paragraphs in a (must) valid json format each with mendatory six following tags.  "
                 f"1. raw_sentence: original sentence in the given paraphraph; "
                 f"2. resolved_sentence: new sentence after the coreference resolution. "
                 f"3. changes: replacement old and new span in the sentence.  "
                 f"4. coref_after_article_the: any coreference that came after article 'the' e.g., 'the film' should be replaced with 'the film film_name' " 
                 f"5. any_parphrasing_or_other_changes_done: any changes made or parapharsing done other than coreference replacemnets. "
+                f"6. valid_json_output: if the output can be loaded with json.loads() "
             )
         
             msg = [
@@ -293,10 +294,23 @@ class OpenAIModel(OpenAIModelBase):
                 new_contexts.append(ctx)
             except:
                 # TODO: Better way needed 
-                new_contexts.append(contexts[i])
-            
+                import pdb
+    
+                msg = [
+                    { "role": "system", "content": "You are json formatter who can fix json format erors. Given an broken json, you will fix all commas and quotes and alll errors and provide oner single valid json object. ",},
+                    {"role": "user", "content": response["choices"][0]["message"]["content"]+"\n output json: " },
+                ]
+                response = openai.ChatCompletion.create(
+                    messages=msg, **self.model_params
+                )
+                
+                pdb.set_trace()
+                ctx = json.loads(response["choices"][0]["message"]["content"])
+                new_contexts.append(ctx)
             
         return new_contexts
+
+
 
     def prompt(self, processed_input):
         """

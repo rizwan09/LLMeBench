@@ -356,7 +356,7 @@ class OpenAIModel(OpenAIModelBase):
     
         #start code for new method
         coref_contexts = self.coref_prompt(processed_input["context"]["sentences"])
-        assert len(coref_contexts) == len(processed_input["context"]["sentences"]):
+        assert len(coref_contexts) == len(processed_input["context"]["sentences"])
         processed_input["context"]["sentences"] = coref_contexts
         #end code for new method
 

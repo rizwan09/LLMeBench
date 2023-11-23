@@ -247,8 +247,67 @@ class OpenAIModel(OpenAIModelBase):
             f"You are a question answering agent. Given a context and a question, your task is to answer the question based on the context. " 
             f"Generate the answer in a json output format with 'answer' tag and an 'evidence_and_explanation' tag "
             f"Instead of a full sentence, your answer must be the shortest word or phrase or named enitity. "
-            f"Some example outputs 'answer' are: yes; no; Ibn Sina; Doha, Qatar; 2,132 seats, Los Angeles, California etc.,. Please make sure it's valid json. "
+            f"Some example outputs 'answer' are: yes; no; Ibn Sina; Doha, Qatar; 2,132 seats, Los Angeles, California etc.,. Please make sure it's valid json. " 
           )
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
+    
+    def cot_prompt(self, data_row):
+    
+        id = data_row["id"]
+        question = data_row["question"]
+        answer = data_row["answer"]
+        supporting_facts = data_row["supporting_facts"]
+        contexts = data_row["context"]["sentences"]
+
+
+        paragraphs = [''.join(docs) for docs in contexts]
+        
+        prompt_string = (
+            f"Question: {question}\nContext: {paragraphs}"
+            f"Output josn:\n\n"
+        )
+
+        system_string = (
+            f"You are a question answering agent. Given a context and a question, your task is to answer the question based on the context. " 
+            f"Think step by step and generate the answer in a json output format with 'answer' tag and 'step_by_step_reasoning' tag "
+            f"Instead of a full sentence, your answer must be the shortest word or phrase or named enitity. "
+            f"Some example outputs 'answer' are: yes; no; Ibn Sina; Doha, Qatar; 2,132 seats, Los Angeles, California etc.,. Please make sure it's valid json. " 
+          )
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
+
+    def evidence_prompt(self, data_row):
+    
+        id = data_row["id"]
+        question = data_row["question"]
+        answer = data_row["answer"]
+        supporting_facts = data_row["supporting_facts"]
+        contexts = data_row["context"]["sentences"]
+
+
+        paragraphs = [''.join(docs) for docs in contexts]
+        
+        prompt_string = (
+            f"Question: {question}\nContext: {paragraphs}"
+            f"Output josn:\n\n"
+        )
+
+        system_string = (
+            f"You are a question answering agent. "
+            f"Given a context and a question, your task is provide me with the evidence from the context to answer the question" 
+            f"Your output must be in a json output format with an 'evidence_context' tag "
+        )
         return [
             {
                 "role": "system",
@@ -406,15 +465,22 @@ class OpenAIModel(OpenAIModelBase):
 
         #Reading: prompt to pass contexts to LLM[]
         # last_prompt_msg = self.last_prompt(processed_input)
+        # last_prompt_msg = self.evidence_prompt(processed_input)
         # response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
 
 
         # last step
         # evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_and_explanation']
+       
+        # evidence = json.loads(response["choices"][0]["message"]["content"])["evidence_context"]
+
+        # evidence = json.loads(response["choices"][0]["message"]["content"])['evidence']
         # new_ranked_sentences = [evidence] + ori_sentences
-        # new_ranked_sentences = [evidence] + ranked_sentences
+        # new_ranked_sentences = [evidence] + ranked_sentences 
+        # new_ranked_sentences = [evidence]
         # processed_input["context"]["sentences"] = new_ranked_sentences
-        last_prompt_msg = self.last_prompt(processed_input)
+        # last_prompt_msg = self.last_prompt(processed_input)
+        last_prompt_msg = self.cot_prompt(processed_input)
         response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
 
 

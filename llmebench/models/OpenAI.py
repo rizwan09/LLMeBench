@@ -334,8 +334,8 @@ class OpenAIModel(OpenAIModelBase):
 
         system_string = (
             f"You are a question answering agent. "
-            f"Given a context and a question, your task is provide me with the evidence from the context to answer the question" 
-            f"Your output must be in a json output format with an 'evidence_context' tag "
+            f"Given a context and a question, your task is provide me with the relevant sentences from the context to answer the question" 
+            f"Your output must be in a json output format with an 'evidence_sentences' tag "
         )
         return [
             {
@@ -529,24 +529,45 @@ class OpenAIModel(OpenAIModelBase):
         return response
     
     def prompt_main_single_agent_direct(self, processed_input):
+        #direct
         last_prompt_msg = self.direct_prompt(processed_input)
         response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         return response
 
     def prompt_main_single_agent_cot(self, processed_input):
+        #cot
         last_prompt_msg = self.cot_prompt(processed_input)
         response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         return response
     
     def prompt_main_single_agent_eviden2gen(self, processed_input):
+        #ours
         evidence_prompt_msg = self.last_prompt(processed_input)
         response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
+        
+        # print(json.loads(response["choices"][0]["message"]["content"]))
+        
         evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_and_explanation']
         new_ranked_sentences = [evidence]
         processed_input["context"]["sentences"] = new_ranked_sentences
         last_prompt_msg = self.last_prompt(processed_input)
         response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         return response
+
+    def prompt_main_single_agent_evidenPrompt2gen(self, processed_input):
+        #ours
+        evidence_prompt_msg = self.evidence_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
+        
+        # print(json.loads(response["choices"][0]["message"]["content"]))
+        
+        evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_sentences']
+        new_ranked_sentences = [evidence]
+        processed_input["context"]["sentences"] = new_ranked_sentences
+        last_prompt_msg = self.last_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+
 
     def prompt(self, processed_input):
         """
@@ -565,12 +586,14 @@ class OpenAIModel(OpenAIModelBase):
             Response from the openai python library
 
         """
-        return self.prompt_main_single_agent_direct(processed_input)
+        return self.prompt_main_single_agent_evidenPrompt2gen(processed_input)
 
 
         # prompt_main_single_agent_eviden2gen
         # prompt_main_single_agent_cot
         # prompt_main_single_agent_direct
+        # prompt_main_single_agent_evidenPrompt2gen
+
         # prompt_main_four_agent_coref_rank_evidence_qa
         # prompt_main_three_agent_coref_rank_qa
 

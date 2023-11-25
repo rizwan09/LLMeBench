@@ -256,6 +256,35 @@ class OpenAIModel(OpenAIModelBase):
             },
             {"role": "user", "content": prompt_string},
         ]
+    def direct_prompt(self, data_row):
+    
+        id = data_row["id"]
+        question = data_row["question"]
+        answer = data_row["answer"]
+        supporting_facts = data_row["supporting_facts"]
+        contexts = data_row["context"]["sentences"]
+
+
+        paragraphs = [''.join(docs) for docs in contexts]
+        
+        prompt_string = (
+            f"Question: {question}\nContext: {paragraphs}"
+            f"Output josn:\n\n"
+        )
+
+        system_string = (
+            f"You are a question answering agent. Given a context and a question, your task is to answer the question based on the context. " 
+            f"Generate the answer in a json output format with 'answer' tag "
+            f"Instead of a full sentence, your answer must be the shortest word or phrase or named enitity. "
+            f"Some example outputs 'answer' are: yes; no; Ibn Sina; Doha, Qatar; 2,132 seats, Los Angeles, California etc.,. Please make sure it's valid json. " 
+          )
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
     
     def cot_prompt(self, data_row):
     
@@ -429,6 +458,96 @@ class OpenAIModel(OpenAIModelBase):
         return sent_relevance
 
 
+    def prompt_main_three_agent_coref_rank_qa(self, processed_input):
+        coref_contexts = self.coref_prompt(processed_input["context"]["sentences"])
+        assert len(coref_contexts) == len(processed_input["context"]["sentences"])
+
+        sentence_score = self.rank_sentences(processed_input["question"], coref_contexts)
+        ranked_sentences = sorted(sentence_score.items(), key=lambda item: float(item[1]))[::-1]
+        ranked_sentences =  [ x[0] for x in ranked_sentences]
+        
+        processed_input["context"]["sentences"] = ranked_sentences
+     
+        last_prompt_msg = self.cot_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
+    def prompt_main_four_agent_coref_rank_evidence_qa_with_ori(self, processed_input):
+        coref_contexts = self.coref_prompt(processed_input["context"]["sentences"])
+        assert len(coref_contexts) == len(processed_input["context"]["sentences"])
+
+        sentence_score = self.rank_sentences(processed_input["question"], coref_contexts)
+        ranked_sentences = sorted(sentence_score.items(), key=lambda item: float(item[1]))[::-1]
+        ranked_sentences =  [ x[0] for x in ranked_sentences]
+
+        ori_sentences = processed_input["context"]["sentences"]
+        processed_input["context"]["sentences"] = ranked_sentences
+
+        last_prompt_msg = self.evidence_prompt(processed_input)
+        evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_context']
+        new_ranked_sentences = [evidence] + ori_sentences
+        processed_input["context"]["sentences"] = new_ranked_sentences
+        last_prompt_msg = self.cot_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
+    def prompt_main_four_agent_coref_rank_evidence_qa_with_reranked(self, processed_input):
+        coref_contexts = self.coref_prompt(processed_input["context"]["sentences"])
+        assert len(coref_contexts) == len(processed_input["context"]["sentences"])
+
+        sentence_score = self.rank_sentences(processed_input["question"], coref_contexts)
+        ranked_sentences = sorted(sentence_score.items(), key=lambda item: float(item[1]))[::-1]
+        ranked_sentences =  [ x[0] for x in ranked_sentences]
+
+        ori_sentences = processed_input["context"]["sentences"]
+        processed_input["context"]["sentences"] = ranked_sentences
+
+        last_prompt_msg = self.evidence_prompt(processed_input)
+        evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_context']
+        new_ranked_sentences = [evidence] + ranked_sentences
+        processed_input["context"]["sentences"] = new_ranked_sentences
+        last_prompt_msg = self.cot_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
+    def prompt_main_four_agent_coref_rank_evidence_qa(self, processed_input):
+        coref_contexts = self.coref_prompt(processed_input["context"]["sentences"])
+        assert len(coref_contexts) == len(processed_input["context"]["sentences"])
+
+        sentence_score = self.rank_sentences(processed_input["question"], coref_contexts)
+        ranked_sentences = sorted(sentence_score.items(), key=lambda item: float(item[1]))[::-1]
+        ranked_sentences =  [ x[0] for x in ranked_sentences]
+
+        processed_input["context"]["sentences"] = ranked_sentences
+
+        last_prompt_msg = self.evidence_prompt(processed_input)
+        evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_context']
+        new_ranked_sentences = [evidence]
+        processed_input["context"]["sentences"] = new_ranked_sentences
+        last_prompt_msg = self.cot_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
+    def prompt_main_single_agent_direct(self, processed_input):
+        last_prompt_msg = self.direct_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+
+    def prompt_main_single_agent_cot(self, processed_input):
+        last_prompt_msg = self.cot_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
+    def prompt_main_single_agent_eviden2gen(self, processed_input):
+        evidence_prompt_msg = self.last_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
+        evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_and_explanation']
+        new_ranked_sentences = [evidence]
+        processed_input["context"]["sentences"] = new_ranked_sentences
+        last_prompt_msg = self.last_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+
     def prompt(self, processed_input):
         """
         OpenAI API ChatCompletion implementationn
@@ -446,45 +565,17 @@ class OpenAIModel(OpenAIModelBase):
             Response from the openai python library
 
         """
-    
-        #start code for new method
-        #coref step
-        # coref_contexts = self.coref_prompt(processed_input["context"]["sentences"])
-        # assert len(coref_contexts) == len(processed_input["context"]["sentences"])
-        
-        #ranking step
-        # sentence_score = self.rank_sentences(processed_input["question"], coref_contexts)
-        # ranked_sentences = sorted(sentence_score.items(), key=lambda item: float(item[1]))[::-1]
-        # ranked_sentences =  [ x[0] for x in ranked_sentences]
-        
-
-        # ori_sentences = processed_input["context"]["sentences"]
-        # processed_input["context"]["sentences"] = ranked_sentences
-        #end code for new method
+        return self.prompt_main_single_agent_direct(processed_input)
 
 
-        #Reading: prompt to pass contexts to LLM[]
-        # last_prompt_msg = self.last_prompt(processed_input)
-        # last_prompt_msg = self.evidence_prompt(processed_input)
-        # response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        # prompt_main_single_agent_eviden2gen
+        # prompt_main_single_agent_cot
+        # prompt_main_single_agent_direct
+        # prompt_main_four_agent_coref_rank_evidence_qa
+        # prompt_main_three_agent_coref_rank_qa
 
 
-        # last step
-        # evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_and_explanation']
-       
-        # evidence = json.loads(response["choices"][0]["message"]["content"])["evidence_context"]
 
-        # evidence = json.loads(response["choices"][0]["message"]["content"])['evidence']
-        # new_ranked_sentences = [evidence] + ori_sentences
-        # new_ranked_sentences = [evidence] + ranked_sentences 
-        # new_ranked_sentences = [evidence]
-        # processed_input["context"]["sentences"] = new_ranked_sentences
-        # last_prompt_msg = self.last_prompt(processed_input)
-        last_prompt_msg = self.cot_prompt(processed_input)
-        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
-
-
-        return response
 
 
 

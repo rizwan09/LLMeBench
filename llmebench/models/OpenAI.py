@@ -228,16 +228,13 @@ class OpenAIModel(OpenAIModelBase):
         return response
 
     def last_prompt(self, data_row):
-    
-        id = data_row["id"]
         question = data_row["question"]
-        answer = data_row["answer"]
-        supporting_facts = data_row["supporting_facts"]
-        contexts = data_row["context"]["sentences"]
-
-
-        paragraphs = [''.join(docs) for docs in contexts]
-        
+        try:
+            contexts = data_row["context"]["sentences"]
+            paragraphs = [''.join(docs) for docs in contexts]
+        except:
+            paragraphs = [ ctx["text"] for ctx in  data_row['ctxs'] ]
+                
         prompt_string = (
             f"Question: {question}\nContext: {paragraphs}"
             f"Output josn:\n\n"
@@ -258,14 +255,13 @@ class OpenAIModel(OpenAIModelBase):
         ]
     def direct_prompt(self, data_row):
     
-        id = data_row["id"]
+       
         question = data_row["question"]
-        answer = data_row["answer"]
-        supporting_facts = data_row["supporting_facts"]
-        contexts = data_row["context"]["sentences"]
-
-
-        paragraphs = [''.join(docs) for docs in contexts]
+        try:
+            contexts = data_row["context"]["sentences"]
+            paragraphs = [''.join(docs) for docs in contexts]
+        except:
+            paragraphs = [ ctx["text"] for ctx in  data_row['ctxs'] ]
         
         prompt_string = (
             f"Question: {question}\nContext: {paragraphs}"
@@ -288,14 +284,14 @@ class OpenAIModel(OpenAIModelBase):
     
     def cot_prompt(self, data_row):
     
-        id = data_row["id"]
+       
         question = data_row["question"]
-        answer = data_row["answer"]
-        supporting_facts = data_row["supporting_facts"]
-        contexts = data_row["context"]["sentences"]
-
-
-        paragraphs = [''.join(docs) for docs in contexts]
+      
+        try:
+            contexts = data_row["context"]["sentences"]
+            paragraphs = [''.join(docs) for docs in contexts]
+        except:
+            paragraphs = [ ctx["text"] for ctx in  data_row['ctxs'] ]
         
         prompt_string = (
             f"Question: {question}\nContext: {paragraphs}"
@@ -318,11 +314,12 @@ class OpenAIModel(OpenAIModelBase):
 
     def evidence_prompt(self, data_row):
     
-        id = data_row["id"]
         question = data_row["question"]
-        answer = data_row["answer"]
-        supporting_facts = data_row["supporting_facts"]
-        contexts = data_row["context"]["sentences"]
+        try:
+            contexts = data_row["context"]["sentences"]
+            paragraphs = [''.join(docs) for docs in contexts]
+        except:
+            paragraphs = [ ctx["text"] for ctx in  data_row['ctxs'] ]
 
 
         paragraphs = [''.join(docs) for docs in contexts]
@@ -528,6 +525,24 @@ class OpenAIModel(OpenAIModelBase):
         response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         return response
     
+    def prompt_main_single_agent_evidenPrompt2gen(self, processed_input):
+        evidence_prompt_msg = self.evidence_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
+        
+        print(json.loads(response["choices"][0]["message"]["content"]))
+        
+        evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_sentences']
+        new_ranked_sentences = [evidence]
+        processed_input["context"]["sentences"] = new_ranked_sentences
+        last_prompt_msg = self.last_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
+    def prompt_main_single_agent_eviden_only(self, processed_input):
+        last_prompt_msg = self.last_prompt(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
     def prompt_main_single_agent_direct(self, processed_input):
         #direct
         last_prompt_msg = self.direct_prompt(processed_input)
@@ -544,29 +559,16 @@ class OpenAIModel(OpenAIModelBase):
         #ours
         evidence_prompt_msg = self.last_prompt(processed_input)
         response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
-        
-        # print(json.loads(response["choices"][0]["message"]["content"]))
-        
         evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_and_explanation']
-        new_ranked_sentences = [evidence]
-        processed_input["context"]["sentences"] = new_ranked_sentences
+        try:
+            processed_input["context"]["sentences"] = [evidence]
+        except:
+            processed_input["ctxs"]=[{"text":evidence}]
         last_prompt_msg = self.last_prompt(processed_input)
         response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         return response
 
-    def prompt_main_single_agent_evidenPrompt2gen(self, processed_input):
-        #ours
-        evidence_prompt_msg = self.evidence_prompt(processed_input)
-        response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
-        
-        # print(json.loads(response["choices"][0]["message"]["content"]))
-        
-        evidence = json.loads(response["choices"][0]["message"]["content"])['evidence_sentences']
-        new_ranked_sentences = [evidence]
-        processed_input["context"]["sentences"] = new_ranked_sentences
-        last_prompt_msg = self.last_prompt(processed_input)
-        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
-        return response
+    
 
 
     def prompt(self, processed_input):
@@ -586,12 +588,13 @@ class OpenAIModel(OpenAIModelBase):
             Response from the openai python library
 
         """
-        return self.prompt_main_single_agent_evidenPrompt2gen(processed_input)
+        return self.prompt_main_single_agent_eviden2gen(processed_input)
 
 
         # prompt_main_single_agent_eviden2gen
         # prompt_main_single_agent_cot
         # prompt_main_single_agent_direct
+
         # prompt_main_single_agent_evidenPrompt2gen
 
         # prompt_main_four_agent_coref_rank_evidence_qa

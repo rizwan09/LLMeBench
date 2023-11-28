@@ -318,6 +318,36 @@ class OpenAIModel(OpenAIModelBase):
             },
             {"role": "user", "content": prompt_string},
         ]
+    def last_prompt_nq(self, data_row):
+        question = data_row["question"]
+        try:
+            contexts = data_row["context"]["sentences"]
+            paragraphs = [''.join(docs) for docs in contexts]
+        except:
+            try:
+                paragraphs = [ ctx["text"] for ctx in  data_row['ctxs'] ]
+            except:
+                paragraphs = data_row['text']
+
+                
+        prompt_string = (
+            f"Question: {question}\nContext: {paragraphs}"
+            f"Output josn:\n\n"
+        )
+
+        system_string = (
+            f"You are a question answering agent. Given a context and a question, your task is to answer the question based on the context. " 
+            f"Generate the answer in a json output format with 'answer' tag and an 'evidence_and_explanation' tag "
+            f"Instead of a full sentence, your answer must be the shortest word or phrase or named enitity. "
+            f"Some example outputs 'answer' are: yes; no; Ibn Sina; Doha, Qatar; 2,132 seats, Los Angeles, California etc.,. Please make sure it's valid json. " 
+          )
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
     
     def last_prompt_wow(self, data_row):
         question = data_row["question"]
@@ -378,8 +408,6 @@ class OpenAIModel(OpenAIModelBase):
             {"role": "user", "content": prompt_string},
         ]
     def direct_prompt(self, data_row):
-    
-       
         question = data_row["question"]
         try:
             contexts = data_row["context"]["sentences"]
@@ -860,33 +888,26 @@ class OpenAIModel(OpenAIModelBase):
             return self.prompt_main_single_agent_cot_wow(processed_input)
         return response
 
-    def prompt_main_single_agent_e2g_old(self, processed_input):
+    def prompt_main_single_agent_e2g_nq(self, processed_input):
         #ours
-        try: 
+  
             # if any crashes occurs
-            evidence_prompt_msg = self.last_prompt(processed_input)
-            response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
-            content = json.loads(response["choices"][0]["message"]["content"])
-            evidence = content['evidence_and_explanation']
+        evidence_prompt_msg = self.last_prompt_nq(processed_input)
+        response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
+        content = json.loads(response["choices"][0]["message"]["content"])
+        evidence = content['evidence_and_explanation']
 
-            if content["answer"].lower() in ["cannot be determined", "unknown", "unclear", 
-                                            "none", "answer not available", "none", "no information",
-                                            "cannot be answered", "not available", "n/a",
-                                            "not enough information", "information not provided", "it is not mentioned in the context"
-                                            "not mentioned"]:
-                return self.prompt_main_single_agent_two_cot(processed_input)
-            else:
-                try:
-                    processed_input["context"]["sentences"] = [evidence]
-                except:
-                    processed_input["ctxs"]=[{"text":evidence}]
-                    last_prompt_msg = self.last_prompt(processed_input)
-                    response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
-        except:
-            try:
-                return self.prompt_main_single_agent_cot(processed_input)
-            except: 
-                return self.prompt_main_single_agent_direct(processed_input)
+        if content["answer"].lower() in ["cannot be determined", "unknown", "unclear", 
+                                        "none", "answer not available", "none", "no information",
+                                        "cannot be answered", "not available", "n/a",
+                                        "not enough information", "information not provided", "it is not mentioned in the context"
+                                        "not mentioned"]:
+            return self.prompt_main_single_agent_cot(processed_input)
+        else:
+            processed_input["ctxs"]=[{"text":evidence}]+processed_input["ctxs"]
+            last_prompt_msg = self.last_prompt_nq(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        
         return response
 
 
@@ -907,7 +928,7 @@ class OpenAIModel(OpenAIModelBase):
             Response from the openai python librar1y
 
         """
-        return self.prompt_main_single_agent_e2g_hotpotqa_huggingface(processed_input)
+        return self.prompt_main_single_agent_e2g_nq(processed_input)
 
 
         # prompt_main_single_agent_e2g

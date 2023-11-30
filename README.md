@@ -125,7 +125,7 @@ The [tutorials directory](docs/tutorials/) provides tutorials on the following: 
 
 
 ## HOTPOTQA :
-[output-e2g](https://drive.google.com/file/d/1LuXrI3Q4JTatoyFL6_iL5NNfOWLfGzpw/view?usp=drive_link)
+[output-e2g](https://drive.google.com/file/d/14SQh9weLE3gxnuPw2ul0pAbCYyJZKNUQ/view?usp=drive_link)
 [output-cot](https://drive.google.com/file/d/1r3ZSfaQx0IhPRca0Y7AfD9FClZ4J28IH/view?usp=drive_link)
 
 ## Citation

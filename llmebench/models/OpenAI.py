@@ -246,7 +246,8 @@ class OpenAIModel(OpenAIModelBase):
 
         system_string = (
             f"You are a text classification agent. Given a context and a claim, please give a judgement to the claim ('SUPPORTS' or 'REFUTES') based on the context. " 
-            f"Generate the answer in a json output format with 'answer' tag, an 'evidence_from_context' tag and a 'step_by_step_reasoning' tag. "
+            # f"Generate the answer in a json output format with 'answer' tag, an 'evidence_from_context' tag and a 'step_by_step_reasoning' tag. "
+            f"Generate the answer in a json output format with 'answer' tag and an 'evidence_and_explanation' tag "
             f"Your answer must be the either ('SUPPORTS' or 'REFUTES') depeneding on whether the claim is supported or refuted by the context. "
             )
         return [
@@ -277,11 +278,11 @@ class OpenAIModel(OpenAIModelBase):
 
         system_string = (
             f"You are a question answering agent. Given a context and a question, your task is to answer the question based on the context. " 
-            f"Generate the answer in a json output format with 'answer' tag, an 'evidence_from_context' tag and a 'step_by_step_reasoning' tag "
+            f"Generate the answer in a json output format with 'answer' tag and an 'evidence_and_explanation' tag "
             f"Instead of a full sentence, your answer must be the shortest word or phrase or named enitity. "
-            f"`And your evidence_from_context should mention exactly what has been mentioned in the context to support the answer. "
             f"Some example outputs 'answer' are: yes; no; Ibn Sina; Doha, Qatar; 2,132 seats, Los Angeles, California etc.,. Please make sure it's valid json. " 
           )
+    
         
         return [
             {
@@ -291,6 +292,37 @@ class OpenAIModel(OpenAIModelBase):
             {"role": "user", "content": prompt_string},
         ]
     
+    def last_prompt_eli5(self, data_row):
+        question = data_row["question"]
+        try:
+            contexts = data_row["context"]["sentences"]
+            paragraphs = [''.join(docs) for docs in contexts]
+        except:
+            try:
+                paragraphs = [ ctx["text"] for ctx in  data_row['ctxs'] ]
+            except:
+                paragraphs = data_row['text']
+
+                
+        prompt_string = (
+            f"Question: {question}\nContext: {paragraphs}"
+            f"Output josn:\n\n"
+        )
+
+        system_string = (
+            f"You are a question answering agent. Given a context and a question, your task is to long answer the question based on the context. " 
+            f"Generate the answer in a json output format with 'answer' tag and an 'evidence_and_explanation' tag "
+            f"Answer this as for a 5 years old child. So your answer must be very very long and very very detailed.  "
+            ) 
+    
+        
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
     def last_prompt_hotpotqa_huggingface(self, data_row):
         question = data_row["question"]
         
@@ -517,6 +549,36 @@ class OpenAIModel(OpenAIModelBase):
             f"Instead of a full sentence, your answer must be the shortest word or phrase or named enitity. "
             f"Some example outputs 'answer' are: yes; no; Ibn Sina; Doha, Qatar; 2,132 seats, Los Angeles, California etc.,. Please make sure it's valid json. " 
           )
+        
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
+    
+    def cot_prompt_eli5(self, data_row):
+    
+       
+        question = data_row["question"]
+      
+        try:
+            contexts = data_row["context"]["sentences"]
+            paragraphs = [''.join(docs) for docs in contexts]
+        except:
+            paragraphs = [ ctx["text"] for ctx in  data_row['ctxs'] ]
+        
+        prompt_string = (
+             f"Question: {question}\nContext: {paragraphs}"
+            f"Output josn:\n\n"
+        )
+
+        system_string = (
+            f"You are a question answering agent. Given a context and a question, your task is to answer the question based on the context. " 
+            f"Think step by step and generate the answer in a json output format with 'answer' tag and 'step_by_step_reasoning' tag "
+            f"Answer me for a 5 years old child. So your answer must be long and very detailed.  "
+            )
         
         return [
             {
@@ -774,6 +836,35 @@ class OpenAIModel(OpenAIModelBase):
             response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         return response
     
+    def prompt_main_single_agent_cot_tqa(self, processed_input):
+        #cot
+        try:
+            last_prompt_msg = self.cot_prompt(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        except:
+            # print("Trying direct as none of e2g or cot works")
+            last_prompt_msg = self.direct_prompt(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
+    def prompt_main_single_agent_cot_nq(self, processed_input):
+        #cot
+        try:
+            last_prompt_msg = self.cot_prompt(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        except:
+            # print("Trying direct as none of e2g or cot works")
+            last_prompt_msg = self.direct_prompt(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
+    def prompt_main_single_agent_cot_eli5(self, processed_input):
+        #cot
+        last_prompt_msg = self.cot_prompt_eli5(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        
+        return response
+    
     def prompt_main_single_agent_cot_fever(self, processed_input):
         #cot
         try:
@@ -815,7 +906,7 @@ class OpenAIModel(OpenAIModelBase):
             evidence_prompt_msg = self.last_prompt_fever(processed_input)
             response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
             content = json.loads(response["choices"][0]["message"]["content"])
-            evidence = content['evidence_from_context']
+            evidence = content['evidence_and_explanation']
             try:
                 processed_input["context"]["sentences"] = [evidence]
             except:
@@ -836,8 +927,8 @@ class OpenAIModel(OpenAIModelBase):
             evidence_prompt_msg = self.last_prompt_tqa(processed_input)
             response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
             content = json.loads(response["choices"][0]["message"]["content"])
-            evidence = content['evidence_from_context'] + content['step_by_step_reasoning']
-            processed_input["ctxs"]=[{"text":evidence}]
+            evidence = content['evidence_and_explanation']
+            processed_input["ctxs"]=[{"text":evidence}] 
             last_prompt_msg = self.last_prompt_tqa(processed_input)
             response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         except:
@@ -847,6 +938,21 @@ class OpenAIModel(OpenAIModelBase):
                 return self.prompt_main_single_agent_direct(processed_input)
         return response
     
+    def prompt_main_single_agent_e2g_eli5(self, processed_input):
+        #ours
+        try: 
+            # if any crashes occurs
+            evidence_prompt_msg = self.last_prompt_eli5(processed_input)
+            response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
+            content = json.loads(response["choices"][0]["message"]["content"])
+            evidence = content['answer'] 
+            processed_input["ctxs"]=[{"text":evidence}] 
+            last_prompt_msg = self.last_prompt_eli5(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        except:
+            return self.prompt_main_single_agent_cot_eli5(processed_input)
+            
+        return response
     
     def prompt_main_single_agent_e2g_hotpotqa_huggingface(self, processed_input):
         #ours
@@ -856,8 +962,8 @@ class OpenAIModel(OpenAIModelBase):
             response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
             content = json.loads(response["choices"][0]["message"]["content"])
             evidence = content['evidence_and_explanation'] 
-            original_context = processed_input["context"]["sentences"]
-            processed_input["context"]["sentences"] = [evidence]
+            # original_context = processed_input["context"]["sentences"]
+            processed_input["context"]["sentences"] = [evidence] 
             last_prompt_msg = self.last_prompt_hotpotqa_huggingface(processed_input)
             response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         except:
@@ -867,6 +973,24 @@ class OpenAIModel(OpenAIModelBase):
                 return self.prompt_main_single_agent_direct(processed_input)
         return response
     
+    def prompt_main_single_agent_e2g_hotpotqa_huggingface_llama2(self, processed_input):
+        #ours
+        try: 
+            # if any crashes occurs
+            evidence_prompt_msg = self.last_prompt_hotpotqa_huggingface(processed_input)
+            response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
+            content = json.loads(response["choices"][0]["message"]["content"])
+            evidence = content['evidence_and_explanation'] 
+            # original_context = processed_input["context"]["sentences"]
+            processed_input["context"]["sentences"] = [evidence] 
+            last_prompt_msg = self.last_prompt_hotpotqa_huggingface(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        except:
+            try:
+                return self.prompt_main_single_agent_cot(processed_input)
+            except: 
+                return self.prompt_main_single_agent_direct(processed_input)
+        return response
 
     def prompt_main_single_agent_e2g_wow(self, processed_input):
         #ours
@@ -881,7 +1005,7 @@ class OpenAIModel(OpenAIModelBase):
             try:
                 processed_input["context"]["sentences"] = [evidence]
             except:
-                processed_input["ctxs"]=[{"text":evidence}]
+                processed_input["ctxs"]=[{"text":evidence}] 
                 last_prompt_msg = self.last_prompt_wow(processed_input)
                 response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         except:
@@ -904,9 +1028,12 @@ class OpenAIModel(OpenAIModelBase):
                                         "not mentioned"]:
             return self.prompt_main_single_agent_cot(processed_input)
         else:
-            processed_input["ctxs"]=[{"text":evidence}]+processed_input["ctxs"]
-            last_prompt_msg = self.last_prompt_nq(processed_input)
-            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+            try:
+                processed_input["context"]["sentences"] = [evidence]
+            except:
+                processed_input["ctxs"]=[{"text":evidence}] + processed_input["ctxs"]
+                last_prompt_msg = self.last_prompt_nq(processed_input)
+                response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         
         return response
 
@@ -928,7 +1055,7 @@ class OpenAIModel(OpenAIModelBase):
             Response from the openai python librar1y
 
         """
-        return self.prompt_main_single_agent_e2g_nq(processed_input)
+        return self.prompt_main_single_agent_cot_wow(processed_input)
 
 
         # prompt_main_single_agent_e2g

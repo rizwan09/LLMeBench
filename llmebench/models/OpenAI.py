@@ -9,6 +9,7 @@ from itertools import chain
 from llmebench.models.model_base import ModelBase
 
 
+
 class OpenAIModelBase(ModelBase):
     """
     OpenAI Model interface. Can be used for models hosted on both OpenAI's platform and
@@ -323,6 +324,7 @@ class OpenAIModel(OpenAIModelBase):
             },
             {"role": "user", "content": prompt_string},
         ]
+    
     def last_prompt_hotpotqa_huggingface(self, data_row):
         question = data_row["question"]
         
@@ -350,6 +352,42 @@ class OpenAIModel(OpenAIModelBase):
             },
             {"role": "user", "content": prompt_string},
         ]
+    
+    def last_prompt_hotpotqa_huggingface_palm(self, data_row):
+        question = data_row["question"]
+        
+        contexts = data_row["context"]["sentences"]
+        paragraphs = [''.join(docs) for docs in contexts]
+        
+
+                
+        prompt_string = (
+            f"Question: {question}\nContext: {paragraphs}"
+            f"Output josn:\n\n"
+        )
+
+        prompt = f"""
+        Given a context and a question, the answer must be the shortest word or phrase or named enitity
+        such as: yes; no; Ibn Sina; Qatar; 2,132 seats etc.,.
+        please provide a short answer to the question based on the context below. 
+         
+        
+        {prompt_string} 
+        
+        ----------------
+
+        Important: generate answer using step-by-step reasoning with explicit evidence from the context and wrap in <evidence-and-reasoning> tag
+        Don't assume facts in your head. 
+
+        yes <evidence-and-reasoning> Person A was an American lawyer and Person B was an American Professor. Hence, both has same nationality. 
+
+        ----------------
+
+        """
+        
+        return prompt
+
+    
     def last_prompt_nq(self, data_row):
         question = data_row["question"]
         try:
@@ -836,6 +874,29 @@ class OpenAIModel(OpenAIModelBase):
             response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         return response
     
+    def prompt_main_single_agent_cot_hotpotqa_huggingface(self, processed_input):
+        #cot
+        try:
+            last_prompt_msg = self.cot_prompt(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        except:
+            # print("Trying direct as none of e2g or cot works")
+            last_prompt_msg = self.direct_prompt(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
+    def prompt_main_single_agent_cot_hotpotqa_huggingface_llama2(self, processed_input):
+        # import pdb
+        # pdb.set_trace()
+        try:
+            last_prompt_msg = self.cot_prompt(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        except:
+            # print("Trying direct as none of e2g or cot works")
+            last_prompt_msg = self.direct_prompt(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        return response
+    
     def prompt_main_single_agent_cot_tqa(self, processed_input):
         #cot
         try:
@@ -975,22 +1036,82 @@ class OpenAIModel(OpenAIModelBase):
     
     def prompt_main_single_agent_e2g_hotpotqa_huggingface_llama2(self, processed_input):
         #ours
+        import pdb
+        # pdb.set_trace()
         try: 
-            # if any crashes occurs
             evidence_prompt_msg = self.last_prompt_hotpotqa_huggingface(processed_input)
             response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
-            content = json.loads(response["choices"][0]["message"]["content"])
-            evidence = content['evidence_and_explanation'] 
-            # original_context = processed_input["context"]["sentences"]
+            content = response["choices"][0]["message"]["content"].lower()
+            try:
+                json_content= json.loads(content[content.find("{"):content.find("}")+1])
+                if "evidence_and_explanation" in json_content:
+                    evidence = json_content["evidence_and_explanation"][0]
+                else:
+                    evidence = json_content["evidence and explanation"][0]
+
+            except:
+                split_answer = content.split("answer:")[1]
+                if "evidence_and_explanation" in split_answer:
+                    evidence = split_answer.split("evidence_and_explanation:")[1].split("\n")[0].replace("text:","").strip("{")
+                elif "evidence and explanation:" in split_answer:
+                    evidence = split_answer.split("evidence and explanation:")[1].split("\n")[0].replace("text:","").strip("{")  
+                else:
+                    print("split_answer: ", split_answer)
+                    print("Evidence not here")
+                    last_prompt_msg = self.cot_prompt(processed_input)
+                    response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+            
             processed_input["context"]["sentences"] = [evidence] 
             last_prompt_msg = self.last_prompt_hotpotqa_huggingface(processed_input)
             response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         except:
-            try:
-                return self.prompt_main_single_agent_cot(processed_input)
-            except: 
-                return self.prompt_main_single_agent_direct(processed_input)
+            last_prompt_msg = self.cot_prompt(processed_input)
+            response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+           
         return response
+    
+    def prompt_main_single_agent_e2g_hotpotqa_huggingface_palm(self, processed_input):
+        prompt = self.last_prompt_hotpotqa_huggingface_palm(processed_input)
+        
+        
+        import pdb
+        # pdb.set_trace()
+        
+        completion = palm.generate_text(
+            model=get_model(),
+            prompt=prompt,
+            stop_sequences=['<evidence-and-reasoning>'],
+            temperature=0,
+            # The maximum length of the response
+            max_output_tokens=800,
+        )
+        print("completion.result: ", completion.result)
+        # pdb.set_trace()
+        try:
+            evidence_explanation = json.loads(completion.result)['step-by-step-reasoning'][0]['evidence-and-reasoning']
+        except Exception:
+            try:
+                response, evidence_explanation = completion.result.split('', maxsplit=1)
+            except:
+                return completion.result
+                    
+        # pdb.set_trace()
+        print("evidence_explanation: ", evidence_explanation)
+        processed_input["context"]["sentences"] = [evidence_explanation] 
+        prompt = self.last_prompt_hotpotqa_huggingface_palm(processed_input)
+        evidence_explanation = None
+        while evidence_explanation is None:
+            completion = palm.generate_text(
+                model=get_model(),
+                prompt=prompt,
+                stop_sequences=['<evidence-and-reasoning>'],
+                temperature=0,
+                # The maximum length of the response
+                max_output_tokens=800,
+            )
+        return completion
+    
+    
 
     def prompt_main_single_agent_e2g_wow(self, processed_input):
         #ours
@@ -1055,8 +1176,10 @@ class OpenAIModel(OpenAIModelBase):
             Response from the openai python librar1y
 
         """
-        return self.prompt_main_single_agent_cot_wow(processed_input)
-
+        
+    
+        return self.prompt_main_single_agent_e2g_nq(processed_input)
+        
 
         # prompt_main_single_agent_e2g
         # prompt_main_single_agent_cot

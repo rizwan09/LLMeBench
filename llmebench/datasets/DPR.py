@@ -61,7 +61,11 @@ class DPRDataset(DatasetBase):
 
 
     def load_data(self, data_split, no_labels=False):
-        path = "./datasets/"+self.huggingface_dataset_name.replace("_","")+"/base/dev.json"
+        if "nq" not in self.huggingface_dataset_name:
+            path = "./datasets/"+self.huggingface_dataset_name.replace("_","")+"/base/dev.json"
+        else: 
+            path = "./datasets/"+self.huggingface_dataset_name.replace("_","")+"/base/test.json"
+            print("loading path ", str(path))
         dataset = self.load_dataset(path)
 
         data = []

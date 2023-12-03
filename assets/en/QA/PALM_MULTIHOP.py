@@ -10,7 +10,7 @@ from collections import Counter
 
 import pprint
 import google.generativeai as palm
-palm.configure(api_key="AIzaSyDyu_HhkkZUQKg8tRau2JHr7kgFpv2pySc")
+palm.configure(api_key="Your key")
 
 dataset_name = "hotpot_qa"
 

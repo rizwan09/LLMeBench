@@ -353,41 +353,122 @@ class OpenAIModel(OpenAIModelBase):
             {"role": "user", "content": prompt_string},
         ]
     
-    def last_prompt_hotpotqa_huggingface_palm(self, data_row):
-        question = data_row["question"]
+    
+    def last_prompt_logiqa_huggingface(self, data_row):
+        question = data_row["query"]
         
-        contexts = data_row["context"]["sentences"]
-        paragraphs = [''.join(docs) for docs in contexts]
+        paragraphs = data_row["context"]
         
+        options =  data_row["options"]
 
-                
+        import pdb
+        # pdb.set_trace()
         prompt_string = (
-            f"Question: {question}\nContext: {paragraphs}"
+            f"Question: {question}\nContext: {paragraphs}\nOptions: {options}"
             f"Output josn:\n\n"
         )
 
-        prompt = f"""
-        Given a context and a question, the answer must be the shortest word or phrase or named enitity
-        such as: yes; no; Ibn Sina; Qatar; 2,132 seats etc.,.
-        please provide a short answer to the question based on the context below. 
-         
+        system_string = (
+            f"You are a contextualized logical question answering agent. Given a context, a question, and four options your task is to select the index of the option [0,1,2,3] that best answers the the question based on the context. " 
+            f"Generate the answer in a json output format with 'answer' tag and an 'evidence_and_explanation' tag "
+           )
         
-        {prompt_string} 
         
-        ----------------
-
-        Important: generate answer using step-by-step reasoning with explicit evidence from the context and wrap in <evidence-and-reasoning> tag
-        Don't assume facts in your head. 
-
-        yes <evidence-and-reasoning> Person A was an American lawyer and Person B was an American Professor. Hence, both has same nationality. 
-
-        ----------------
-
-        """
-        
-        return prompt
-
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
     
+    def last_prompt_drop_huggingface(self, data_row):
+        question = data_row["question"]
+        
+        paragraphs = data_row["passage"]
+
+        
+        prompt_string = (
+        f"Question: {question}\nContext: {paragraphs}"
+        f"Output josn:\n\n"
+        )
+        
+
+        system_string = (
+            f"You are a question answering agent. Given a context and a question, your task is to answer the question based on the context. " 
+            f"Generate the answer in a json output format with 'answer' tag and an 'evidence_and_explanation' tag "
+           )
+        
+        
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
+    
+
+    def cot_prompt_logiqa_huggingface(self, data_row):
+        question = data_row["query"]
+        
+        paragraphs = data_row["context"]
+        
+        options =  data_row["options"]
+
+        import pdb
+        # pdb.set_trace()
+        prompt_string = (
+            f"Question: {question}\nContext: {paragraphs}\nOptions: {options}"
+            f"Output josn:\n\n"
+        )
+
+        system_string = (
+            f"You are a contextualized logical question answering agent. Given a context, a question, and four options your task is to select the index of the option [0,1,2,3] that best answers the the question based on the context. " 
+            f"Think step by step and generate the answer in a json output format with 'answer' tag and 'step_by_step_reasoning' tag "
+           )
+        
+        
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
+
+    def cot_prompt_drop_huggingface(self, data_row):
+        question = data_row["question"]
+        
+        paragraphs = data_row["passage"]
+
+        
+        prompt_string = (
+        f"Question: {question}\nContext: {paragraphs}"
+        f"Output josn:\n\n"
+        )
+        
+
+        prompt_string = (
+        f"Question: {question}\nContext: {paragraphs}"
+        f"Output josn:\n\n"
+        )
+        
+
+        system_string = (
+            f"You are a question answering agent. Given a context and a question, your task is to answer the question based on the context. " 
+            f"Think step by step and generate the answer in a json output format with 'answer' tag and 'step_by_step_reasoning' tag "
+           )
+        
+        
+        return [
+            {
+                "role": "system",
+                "content": system_string,
+            },
+            {"role": "user", "content": prompt_string},
+        ]
+
     def last_prompt_nq(self, data_row):
         question = data_row["question"]
         try:
@@ -943,6 +1024,21 @@ class OpenAIModel(OpenAIModelBase):
         
         return response
     
+    def prompt_main_single_agent_cot_logiqa_huggingface(self, processed_input):
+        #cot
+        last_prompt_msg = self.cot_prompt_logiqa_huggingface(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        
+        return response
+    def prompt_main_single_agent_cot_drop_huggingface(self, processed_input):
+        #cot
+        import pdb
+        # pdb.set_trace()
+        last_prompt_msg = self.cot_prompt_drop_huggingface(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        
+        return response
+    
     def prompt_main_single_agent_two_cot(self, processed_input):
         evidence_prompt_msg = self.cot_prompt(processed_input)
         response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
@@ -1032,6 +1128,43 @@ class OpenAIModel(OpenAIModelBase):
                 return self.prompt_main_single_agent_cot(processed_input)
             except: 
                 return self.prompt_main_single_agent_direct(processed_input)
+        return response
+    
+    def prompt_main_single_agent_e2g_logiqa_huggingface(self, processed_input):
+        #ours
+      
+        # if any crashes occurs
+        evidence_prompt_msg = self.last_prompt_logiqa_huggingface(processed_input)
+        response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
+        content = json.loads(response["choices"][0]["message"]["content"])
+        evidence = content['evidence_and_explanation'] 
+        # original_context = processed_input["context"]["sentences"]
+        processed_input["context"] = evidence #+"\n"+processed_input["context"]
+        last_prompt_msg = self.last_prompt_logiqa_huggingface(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        
+        return response
+
+    def prompt_main_single_agent_e2g_drop_huggingface(self, processed_input):
+        #ours
+      
+        # if any crashes occurs
+        # if "number" in processed_input["type"]:
+        #     last_prompt_msg = self.cot_prompt_drop_huggingface(processed_input)
+        #     response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        #     return response
+        
+        evidence_prompt_msg = self.last_prompt_drop_huggingface(processed_input)
+        response = openai.ChatCompletion.create(messages=evidence_prompt_msg, **self.model_params)
+        content = json.loads(response["choices"][0]["message"]["content"])
+        evidence = content['evidence_and_explanation'] 
+        
+        
+        processed_input["passage"] = evidence
+        
+        last_prompt_msg = self.last_prompt_drop_huggingface(processed_input)
+        response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
+        
         return response
     
     def prompt_main_single_agent_e2g_hotpotqa_huggingface_llama2(self, processed_input):
@@ -1145,14 +1278,20 @@ class OpenAIModel(OpenAIModelBase):
         if content["answer"].lower() in ["cannot be determined", "unknown", "unclear", 
                                         "none", "answer not available", "none", "no information",
                                         "cannot be answered", "not available", "n/a",
-                                        "not enough information", "information not provided", "it is not mentioned in the context"
+                                        "not enough information", "information not provided", "it is not mentioned in the context",
                                         "not mentioned"]:
             return self.prompt_main_single_agent_cot(processed_input)
         else:
             try:
                 processed_input["context"]["sentences"] = [evidence]
             except:
-                processed_input["ctxs"]=[{"text":evidence}] + processed_input["ctxs"]
+                if  ("w" in processed_input["question"][:3].lower() and "h" in processed_input["question"][:3].lower()) \
+                or processed_input["question"].split()[0].strip("n't").lower() in \
+                ["be", "am", "is", "are", "was", "were", "do", "does", "did", "have", "has", "had",\
+                  "can", "could", "shall", "should", "will", "would"]:
+                    processed_input["ctxs"]=[{"text":evidence}] + processed_input["ctxs"]
+                else:
+                     processed_input["ctxs"]=[{"text":evidence}] 
                 last_prompt_msg = self.last_prompt_nq(processed_input)
                 response = openai.ChatCompletion.create(messages=last_prompt_msg, **self.model_params)
         
@@ -1178,7 +1317,8 @@ class OpenAIModel(OpenAIModelBase):
         """
         
     
-        return self.prompt_main_single_agent_e2g_nq(processed_input)
+        return self.prompt_main_single_agent_e2g_logiqa_huggingface(processed_input)
+
         
 
         # prompt_main_single_agent_e2g
